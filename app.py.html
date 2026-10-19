@@ -1,0 +1,375 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name=claude:viewport-fit-sides content=cover><style>:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-right:env(safe-area-inset-right,0px);padding-bottom:env(safe-area-inset-bottom,0px);padding-left:env(safe-area-inset-left,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}</style><style>.md-table{overflow-x:auto}@media print{.md-table{overflow-x:visible}}</style><style>:root{color-scheme:light dark;--md-bg:#fff;--md-text:rgba(0,0,0,.8);--md-muted:rgba(0,0,0,.6);--md-fill:rgba(0,0,0,.04);--md-fill-strong:rgba(0,0,0,.06);--md-rule:rgba(0,0,0,.1);--md-rule-strong:rgba(0,0,0,.16);--md-link:hsl(210 100% 45%)}@media (prefers-color-scheme:dark){:root:where(:not([data-theme="light"])){--md-bg:#0d0d0d;--md-text:rgba(255,255,255,.85);--md-muted:rgba(255,255,255,.6);--md-fill:rgba(255,255,255,.06);--md-fill-strong:rgba(255,255,255,.09);--md-rule:rgba(255,255,255,.14);--md-rule-strong:rgba(255,255,255,.22);--md-link:hsl(210 100% 72%)}}:root[data-theme="dark"]{color-scheme:dark;--md-bg:#0d0d0d;--md-text:rgba(255,255,255,.85);--md-muted:rgba(255,255,255,.6);--md-fill:rgba(255,255,255,.06);--md-fill-strong:rgba(255,255,255,.09);--md-rule:rgba(255,255,255,.14);--md-rule-strong:rgba(255,255,255,.22);--md-link:hsl(210 100% 72%)}:root[data-theme="light"]{color-scheme:light}@media print{:root,:root[data-theme="dark"]{color-scheme:light;--md-bg:#fff;--md-text:rgba(0,0,0,.8);--md-muted:rgba(0,0,0,.6);--md-fill:rgba(0,0,0,.04);--md-fill-strong:rgba(0,0,0,.06);--md-rule:rgba(0,0,0,.1);--md-rule-strong:rgba(0,0,0,.16);--md-link:hsl(210 100% 45%)}}body{background:var(--md-bg);color:var(--md-text);max-width:720px;margin:0 auto;padding:32px;display:flex;flex-direction:column;gap:10px;font:14px/1.55 -apple-system,BlinkMacSystemFont,'SF Pro','Segoe UI',sans-serif;overflow-wrap:break-word}body>:first-child{margin-top:0}h1,h2,h3,h4,h5,h6{margin:6px 0 0;line-height:1.25;font-weight:600;text-wrap:balance}h1{font-size:1.35em}h2{font-size:1.15em;color:var(--md-muted)}h3,h4,h5,h6{font-size:1em}p,ul,ol,blockquote,table,pre,hr{margin:0}strong{font-weight:600}a{color:var(--md-link);text-decoration:none}a:hover{text-decoration:underline}ul,ol{display:flex;flex-direction:column;gap:6px;padding-left:22px}ul{list-style:disc}ol{list-style:decimal}:is(li,td,th)>*+:is(p,ul,ol,blockquote){margin-top:6px}blockquote{display:flex;flex-direction:column;gap:10px;border-left:2px solid var(--md-rule);padding-left:10px;color:var(--md-muted)}:not(pre)>code{background:var(--md-fill);padding:1px 3px;border-radius:4px;font:.92em 'SF Mono',ui-monospace,Menlo,Consolas,monospace}a>code{background:none;color:inherit}pre{background:var(--md-fill);padding:10px 12px;border-radius:6px;overflow-x:auto;font:12px/1.5 'SF Mono',ui-monospace,Menlo,Consolas,monospace;margin-block:4px}pre code{background:none;padding:0;font:inherit}table{width:100%;border-collapse:separate;border-spacing:2px;font:inherit}th,td{padding:6px 8px;border-radius:3px;text-align:left;vertical-align:top}th{background:var(--md-fill-strong);font-weight:600}td{background:var(--md-fill)}:is(th,td) :not(pre)>code{background:transparent}hr{border:0;border-top:1px solid var(--md-rule-strong);margin-block:10px}img{max-width:100%;height:auto;border-radius:4px}</style>
+</head><body>
+<pre><code class="language-python">import numpy as np
+import pandas as pd
+import plotly.graph_objects as go
+import streamlit as st
+import yfinance as yf
+from plotly.subplots import make_subplots
+
+st.set_page_config(page_title=&#34;วิเคราะห์หุ้นไทย&#34;, page_icon=&#34;📈&#34;, layout=&#34;wide&#34;)
+
+WATCHLIST = [
+    &#34;ADVANC&#34;, &#34;AOT&#34;, &#34;BBL&#34;, &#34;BDMS&#34;, &#34;BEM&#34;, &#34;BH&#34;, &#34;CPALL&#34;, &#34;CPN&#34;, &#34;CRC&#34;, &#34;DELTA&#34;,
+    &#34;EGCO&#34;, &#34;GPSC&#34;, &#34;GULF&#34;, &#34;HMPRO&#34;, &#34;INTUCH&#34;, &#34;IVL&#34;, &#34;KBANK&#34;, &#34;KTB&#34;, &#34;MINT&#34;,
+    &#34;OR&#34;, &#34;PTT&#34;, &#34;PTTEP&#34;, &#34;PTTGC&#34;, &#34;SCB&#34;, &#34;SCC&#34;, &#34;TISCO&#34;, &#34;TTB&#34;, &#34;TRUE&#34;,
+]
+
+
+# ----------------------------------------------------------------- data
+def to_symbol(t: str) -&gt; str:
+    t = t.strip().upper()
+    return t if t.endswith(&#34;.BK&#34;) else f&#34;{t}.BK&#34;
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def load(symbol: str, period: str = &#34;2y&#34;):
+    tk = yf.Ticker(symbol)
+    hist = tk.history(period=period, auto_adjust=True)
+    try:
+        info = tk.info or {}
+    except Exception:
+        info = {}
+    return hist, info
+
+
+# ----------------------------------------------------------- indicators
+def rsi(close, n=14):
+    d = close.diff()
+    up = d.clip(lower=0).ewm(alpha=1 / n, adjust=False).mean()
+    dn = (-d.clip(upper=0)).ewm(alpha=1 / n, adjust=False).mean()
+    return 100 - 100 / (1 + up / dn.replace(0, np.nan))
+
+
+def atr(df, n=14):
+    pc = df[&#34;Close&#34;].shift()
+    tr = pd.concat(
+        [df[&#34;High&#34;] - df[&#34;Low&#34;], (df[&#34;High&#34;] - pc).abs(), (df[&#34;Low&#34;] - pc).abs()], axis=1
+    ).max(axis=1)
+    return tr.ewm(alpha=1 / n, adjust=False).mean()
+
+
+def add_indicators(df):
+    df = df.copy()
+    df[&#34;EMA20&#34;] = df[&#34;Close&#34;].ewm(span=20, adjust=False).mean()
+    df[&#34;SMA50&#34;] = df[&#34;Close&#34;].rolling(50).mean()
+    df[&#34;SMA200&#34;] = df[&#34;Close&#34;].rolling(200).mean()
+    df[&#34;RSI&#34;] = rsi(df[&#34;Close&#34;])
+    df[&#34;ATR&#34;] = atr(df)
+    macd = df[&#34;Close&#34;].ewm(span=12, adjust=False).mean() - df[&#34;Close&#34;].ewm(span=26, adjust=False).mean()
+    df[&#34;MACD_H&#34;] = macd - macd.ewm(span=9, adjust=False).mean()
+    return df
+
+
+# ---------------------------------------------------------- fundamentals
+def g(info, key):
+    v = info.get(key)
+    return v if isinstance(v, (int, float)) and not pd.isna(v) else None
+
+
+def score_fundamentals(info, price):
+    &#34;&#34;&#34;คืน list ของ (ตัวชี้วัด, ค่า, คะแนน 0-2, คำอธิบาย) และคะแนนรวม %&#34;&#34;&#34;
+    is_fin = info.get(&#34;sector&#34;) == &#34;Financial Services&#34;
+    rows = []
+
+    def add(name, val, fmt, pts, why):
+        rows.append((name, &#34;-&#34; if val is None else fmt.format(val), pts, why))
+
+    pe = g(info, &#34;trailingPE&#34;)
+    if pe is None or pe &lt;= 0:
+        add(&#34;P/E&#34;, pe, &#34;{:.1f}&#34;, 0, &#34;ไม่มี P/E หรือกำไรติดลบ&#34;)
+    elif pe &lt; 15:
+        add(&#34;P/E&#34;, pe, &#34;{:.1f}&#34;, 2, &#34;ราคาไม่แพงเมื่อเทียบกับกำไร&#34;)
+    elif pe &lt; 25:
+        add(&#34;P/E&#34;, pe, &#34;{:.1f}&#34;, 1, &#34;ราคาอยู่ระดับกลาง&#34;)
+    else:
+        add(&#34;P/E&#34;, pe, &#34;{:.1f}&#34;, 0, &#34;ราคาสูงเมื่อเทียบกับกำไร&#34;)
+
+    pb = g(info, &#34;priceToBook&#34;)
+    if pb is None:
+        add(&#34;P/B&#34;, pb, &#34;{:.2f}&#34;, 0, &#34;ไม่มีข้อมูล&#34;)
+    elif pb &lt; 1.5:
+        add(&#34;P/B&#34;, pb, &#34;{:.2f}&#34;, 2, &#34;ซื้อขายใกล้มูลค่าทางบัญชี&#34;)
+    elif pb &lt; 3:
+        add(&#34;P/B&#34;, pb, &#34;{:.2f}&#34;, 1, &#34;มูลค่าทางบัญชีอยู่ระดับกลาง&#34;)
+    else:
+        add(&#34;P/B&#34;, pb, &#34;{:.2f}&#34;, 0, &#34;ราคาสูงกว่ามูลค่าทางบัญชีมาก&#34;)
+
+    roe = g(info, &#34;returnOnEquity&#34;)
+    roe = roe * 100 if roe is not None else None
+    if roe is None:
+        add(&#34;ROE %&#34;, roe, &#34;{:.1f}&#34;, 0, &#34;ไม่มีข้อมูล&#34;)
+    elif roe &gt;= 15:
+        add(&#34;ROE %&#34;, roe, &#34;{:.1f}&#34;, 2, &#34;ใช้เงินทุนผู้ถือหุ้นสร้างกำไรได้ดี&#34;)
+    elif roe &gt;= 8:
+        add(&#34;ROE %&#34;, roe, &#34;{:.1f}&#34;, 1, &#34;ผลตอบแทนต่อส่วนผู้ถือหุ้นระดับกลาง&#34;)
+    else:
+        add(&#34;ROE %&#34;, roe, &#34;{:.1f}&#34;, 0, &#34;ผลตอบแทนต่อส่วนผู้ถือหุ้นต่ำ&#34;)
+
+    if not is_fin:
+        de = g(info, &#34;debtToEquity&#34;)
+        de = de / 100 if de is not None else None
+        if de is None:
+            add(&#34;D/E (เท่า)&#34;, de, &#34;{:.2f}&#34;, 0, &#34;ไม่มีข้อมูล&#34;)
+        elif de &lt; 1:
+            add(&#34;D/E (เท่า)&#34;, de, &#34;{:.2f}&#34;, 2, &#34;หนี้ต่ำ ฐานะการเงินแข็งแรง&#34;)
+        elif de &lt; 2:
+            add(&#34;D/E (เท่า)&#34;, de, &#34;{:.2f}&#34;, 1, &#34;หนี้อยู่ระดับกลาง&#34;)
+        else:
+            add(&#34;D/E (เท่า)&#34;, de, &#34;{:.2f}&#34;, 0, &#34;หนี้สูง เสี่ยงต่อดอกเบี้ย&#34;)
+
+    pm = g(info, &#34;profitMargins&#34;)
+    pm = pm * 100 if pm is not None else None
+    if pm is None:
+        add(&#34;Net margin %&#34;, pm, &#34;{:.1f}&#34;, 0, &#34;ไม่มีข้อมูล&#34;)
+    elif pm &gt;= 12:
+        add(&#34;Net margin %&#34;, pm, &#34;{:.1f}&#34;, 2, &#34;อัตรากำไรสุทธิสูง&#34;)
+    elif pm &gt;= 5:
+        add(&#34;Net margin %&#34;, pm, &#34;{:.1f}&#34;, 1, &#34;อัตรากำไรสุทธิปานกลาง&#34;)
+    else:
+        add(&#34;Net margin %&#34;, pm, &#34;{:.1f}&#34;, 0, &#34;อัตรากำไรสุทธิบาง&#34;)
+
+    rg = g(info, &#34;revenueGrowth&#34;)
+    rg = rg * 100 if rg is not None else None
+    if rg is None:
+        add(&#34;รายได้โต % (YoY)&#34;, rg, &#34;{:.1f}&#34;, 0, &#34;ไม่มีข้อมูล&#34;)
+    elif rg &gt;= 8:
+        add(&#34;รายได้โต % (YoY)&#34;, rg, &#34;{:.1f}&#34;, 2, &#34;รายได้เติบโตดี&#34;)
+    elif rg &gt;= 0:
+        add(&#34;รายได้โต % (YoY)&#34;, rg, &#34;{:.1f}&#34;, 1, &#34;รายได้โตช้า&#34;)
+    else:
+        add(&#34;รายได้โต % (YoY)&#34;, rg, &#34;{:.1f}&#34;, 0, &#34;รายได้หดตัว&#34;)
+
+    eg = g(info, &#34;earningsGrowth&#34;)
+    eg = eg * 100 if eg is not None else None
+    if eg is None:
+        add(&#34;กำไรโต % (YoY)&#34;, eg, &#34;{:.1f}&#34;, 0, &#34;ไม่มีข้อมูล&#34;)
+    elif eg &gt;= 10:
+        add(&#34;กำไรโต % (YoY)&#34;, eg, &#34;{:.1f}&#34;, 2, &#34;กำไรเติบโตแข็งแรง&#34;)
+    elif eg &gt;= 0:
+        add(&#34;กำไรโต % (YoY)&#34;, eg, &#34;{:.1f}&#34;, 1, &#34;กำไรทรงตัว/โตเล็กน้อย&#34;)
+    else:
+        add(&#34;กำไรโต % (YoY)&#34;, eg, &#34;{:.1f}&#34;, 0, &#34;กำไรลดลง&#34;)
+
+    div = g(info, &#34;dividendRate&#34;)
+    dy = div / price * 100 if div and price else None
+    if dy is None:
+        add(&#34;Dividend yield %&#34;, dy, &#34;{:.2f}&#34;, 0, &#34;ไม่มีข้อมูลปันผล&#34;)
+    elif dy &gt;= 4:
+        add(&#34;Dividend yield %&#34;, dy, &#34;{:.2f}&#34;, 2, &#34;ปันผลสูง ช่วยหนุนผลตอบแทน&#34;)
+    elif dy &gt;= 2:
+        add(&#34;Dividend yield %&#34;, dy, &#34;{:.2f}&#34;, 1, &#34;ปันผลระดับกลาง&#34;)
+    else:
+        add(&#34;Dividend yield %&#34;, dy, &#34;{:.2f}&#34;, 0, &#34;ปันผลต่ำ&#34;)
+
+    pct = sum(r[2] for r in rows) / (2 * len(rows)) * 100
+    return rows, pct
+
+
+# ------------------------------------------------------------- technical
+def analyze_technical(df):
+    last = df.iloc[-1]
+    c, e20, s50, s200 = last[&#34;Close&#34;], last[&#34;EMA20&#34;], last[&#34;SMA50&#34;], last[&#34;SMA200&#34;]
+    r, a, mh = last[&#34;RSI&#34;], last[&#34;ATR&#34;], last[&#34;MACD_H&#34;]
+    pts, notes_pos, notes_neg = 0, [], []
+
+    def chk(cond, p, pos, neg):
+        nonlocal pts
+        if cond:
+            pts += p
+            notes_pos.append(pos)
+        else:
+            notes_neg.append(neg)
+
+    chk(c &gt; s200, 2, &#34;ราคายืนเหนือ SMA200 (แนวโน้มใหญ่เป็นขาขึ้น)&#34;, &#34;ราคาต่ำกว่า SMA200 (แนวโน้มใหญ่ยังอ่อน)&#34;)
+    chk(c &gt; s50, 1, &#34;ราคายืนเหนือ SMA50&#34;, &#34;ราคาต่ำกว่า SMA50&#34;)
+    chk(s50 &gt; s200, 1, &#34;SMA50 อยู่เหนือ SMA200 (Golden Cross)&#34;, &#34;SMA50 ต่ำกว่า SMA200 (Death Cross)&#34;)
+    chk(mh &gt; 0, 1, &#34;MACD histogram เป็นบวก (โมเมนตัมบวก)&#34;, &#34;MACD histogram เป็นลบ (โมเมนตัมลบ)&#34;)
+    if 40 &lt;= r &lt; 70:
+        pts += 2
+        notes_pos.append(f&#34;RSI {r:.0f} อยู่ในโซนสุขภาพดี&#34;)
+    elif r &lt; 40:
+        pts += 1
+        notes_pos.append(f&#34;RSI {r:.0f} เริ่มขายมากเกินไป อาจมีโอกาสรีบาวด์&#34;)
+    else:
+        notes_neg.append(f&#34;RSI {r:.0f} ซื้อมากเกินไป เสี่ยงพักตัว&#34;)
+
+    support = df[&#34;Low&#34;].tail(60).min()
+    resistance = df[&#34;High&#34;].tail(60).max()
+    return dict(
+        close=c, ema20=e20, sma50=s50, sma200=s200, rsi=r, atr=a,
+        score=pts / 7 * 100, pos=notes_pos, neg=notes_neg,
+        support=support, resistance=resistance,
+    )
+
+
+def build_plan(tech, fund_pct, info):
+    combined = 0.5 * fund_pct + 0.5 * tech[&#34;score&#34;]
+    c, r, a = tech[&#34;close&#34;], tech[&#34;rsi&#34;], tech[&#34;atr&#34;]
+    pullback = tech[&#34;ema20&#34;] if tech[&#34;ema20&#34;] &lt; c * 0.99 else tech[&#34;support&#34;]
+
+    if combined &gt;= 60 and r &lt; 70 and c &gt; tech[&#34;sma50&#34;]:
+        signal, entry = &#34;🟢 ซื้อ (ทยอยเข้า)&#34;, c
+    elif combined &gt;= 60:
+        signal, entry = &#34;🟡 รอจังหวะย่อแล้วค่อยซื้อ&#34;, pullback
+    elif combined &gt;= 45:
+        signal, entry = &#34;🟡 ถือ / รอดูสัญญาณ&#34;, pullback
+    else:
+        signal, entry = &#34;🔴 หลีกเลี่ยง / ขาย&#34;, pullback
+
+    stop = entry - 2 * a
+    risk = entry - stop
+    t1, t2 = entry + 1.5 * risk, entry + 3 * risk
+    analyst = g(info, &#34;targetMeanPrice&#34;)
+    return dict(
+        combined=combined, signal=signal, entry=entry,
+        zone=(entry - 0.5 * a, entry + 0.5 * a),
+        stop=stop, t1=t1, t2=t2, analyst=analyst,
+        rr1=1.5, rr2=3.0,
+    )
+
+
+def analyze(symbol):
+    hist, info = load(symbol)
+    if hist is None or len(hist) &lt; 210:
+        return None
+    df = add_indicators(hist.dropna(subset=[&#34;Close&#34;]))
+    price = df[&#34;Close&#34;].iloc[-1]
+    rows, fpct = score_fundamentals(info, price)
+    tech = analyze_technical(df)
+    plan = build_plan(tech, fpct, info)
+    return dict(df=df, info=info, rows=rows, fpct=fpct, tech=tech, plan=plan, price=price)
+
+
+# ----------------------------------------------------------------- chart
+def make_chart(df, plan, symbol, days):
+    d = df.tail(days)
+    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.75, 0.25], vertical_spacing=0.03)
+    fig.add_trace(go.Candlestick(
+        x=d.index, open=d[&#34;Open&#34;], high=d[&#34;High&#34;], low=d[&#34;Low&#34;], close=d[&#34;Close&#34;], name=&#34;ราคา&#34;), row=1, col=1)
+    for col, color in [(&#34;EMA20&#34;, &#34;#f6c344&#34;), (&#34;SMA50&#34;, &#34;#3b82f6&#34;), (&#34;SMA200&#34;, &#34;#a855f7&#34;)]:
+        fig.add_trace(go.Scatter(x=d.index, y=d[col], name=col, line=dict(width=1.3, color=color)), row=1, col=1)
+    fig.add_hrect(y0=plan[&#34;zone&#34;][0], y1=plan[&#34;zone&#34;][1], fillcolor=&#34;green&#34;, opacity=0.15,
+                  line_width=0, row=1, col=1)
+    for y, label, color in [(plan[&#34;stop&#34;], &#34;Stop&#34;, &#34;red&#34;), (plan[&#34;t1&#34;], &#34;เป้า 1&#34;, &#34;green&#34;),
+                            (plan[&#34;t2&#34;], &#34;เป้า 2&#34;, &#34;darkgreen&#34;)]:
+        fig.add_hline(y=y, line_dash=&#34;dash&#34;, line_color=color, annotation_text=f&#34;{label} {y:.2f}&#34;,
+                      annotation_position=&#34;right&#34;, row=1, col=1)
+    fig.add_trace(go.Scatter(x=d.index, y=d[&#34;RSI&#34;], name=&#34;RSI&#34;, line=dict(color=&#34;#ef4444&#34;)), row=2, col=1)
+    fig.add_hline(y=70, line_dash=&#34;dot&#34;, row=2, col=1)
+    fig.add_hline(y=30, line_dash=&#34;dot&#34;, row=2, col=1)
+    fig.update_layout(height=650, xaxis_rangeslider_visible=False, margin=dict(l=10, r=10, t=30, b=10),
+                      title=symbol, legend=dict(orientation=&#34;h&#34;))
+    return fig
+
+
+# -------------------------------------------------------------------- UI
+st.title(&#34;📈 วิเคราะห์หุ้นไทย: พื้นฐาน + จุดเข้า/ออก&#34;)
+st.caption(&#34;ข้อมูลจาก Yahoo Finance (ดีเลย์ได้ และข้อมูลพื้นฐานบางตัวอาจไม่ครบ) &#34;
+           &#34;เครื่องมือนี้ใช้เพื่อการศึกษา ไม่ใช่คำแนะนำการลงทุน&#34;)
+
+with st.sidebar:
+    st.header(&#34;ตั้งค่า&#34;)
+    choice = st.selectbox(&#34;เลือกหุ้น (SET)&#34;, WATCHLIST, index=WATCHLIST.index(&#34;CPALL&#34;))
+    custom = st.text_input(&#34;หรือพิมพ์ชื่อหุ้นเอง&#34;, placeholder=&#34;เช่น BANPU&#34;)
+    days = st.slider(&#34;จำนวนวันในกราฟ&#34;, 90, 500, 250, step=10)
+    st.divider()
+    st.subheader(&#34;คำนวณขนาดไม้&#34;)
+    capital = st.number_input(&#34;เงินทุน (บาท)&#34;, 10_000, 100_000_000, 500_000, step=10_000)
+    risk_pct = st.slider(&#34;ยอมขาดทุนต่อไม้ (% ของพอร์ต)&#34;, 0.5, 5.0, 1.0, step=0.5)
+
+symbol = to_symbol(custom or choice)
+tab1, tab2 = st.tabs([&#34;วิเคราะห์รายตัว&#34;, &#34;สแกนหลายตัว&#34;])
+
+with tab1:
+    with st.spinner(&#34;กำลังโหลดข้อมูล...&#34;):
+        res = analyze(symbol)
+    if res is None:
+        st.error(f&#34;ไม่พบข้อมูลของ {symbol} (หรือข้อมูลย้อนหลังไม่ถึง 210 วัน)&#34;)
+        st.stop()
+
+    info, plan, tech = res[&#34;info&#34;], res[&#34;plan&#34;], res[&#34;tech&#34;]
+    st.subheader(f&#34;{info.get(&#39;longName&#39;, symbol)} ({symbol})&#34;)
+    st.caption(f&#34;{info.get(&#39;sector&#39;, &#39;-&#39;)} · {info.get(&#39;industry&#39;, &#39;-&#39;)}&#34;)
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric(&#34;ราคาล่าสุด&#34;, f&#34;{res[&#39;price&#39;]:.2f}&#34;)
+    c2.metric(&#34;คะแนนพื้นฐาน&#34;, f&#34;{res[&#39;fpct&#39;]:.0f}/100&#34;)
+    c3.metric(&#34;คะแนนเทคนิค&#34;, f&#34;{tech[&#39;score&#39;]:.0f}/100&#34;)
+    c4.metric(&#34;คะแนนรวม&#34;, f&#34;{plan[&#39;combined&#39;]:.0f}/100&#34;)
+    st.markdown(f&#34;### สัญญาณ: {plan[&#39;signal&#39;]}&#34;)
+
+    st.plotly_chart(make_chart(res[&#34;df&#34;], plan, symbol, days), use_container_width=True)
+
+    st.markdown(&#34;#### 🎯 แผนซื้อขาย&#34;)
+    a, b, c_ = st.columns(3)
+    a.metric(&#34;โซนเข้าซื้อ&#34;, f&#34;{plan[&#39;zone&#39;][0]:.2f} – {plan[&#39;zone&#39;][1]:.2f}&#34;)
+    b.metric(&#34;จุดตัดขาดทุน (Stop)&#34;, f&#34;{plan[&#39;stop&#39;]:.2f}&#34;,
+             f&#34;{(plan[&#39;stop&#39;] / plan[&#39;entry&#39;] - 1) * 100:.1f}%&#34;, delta_color=&#34;inverse&#34;)
+    c_.metric(&#34;เป้าหมาย 1 / 2&#34;, f&#34;{plan[&#39;t1&#39;]:.2f} / {plan[&#39;t2&#39;]:.2f}&#34;,
+              f&#34;R:R 1:{plan[&#39;rr1&#39;]:.1f} / 1:{plan[&#39;rr2&#39;]:.0f}&#34;)
+    if plan[&#34;analyst&#34;]:
+        st.caption(f&#34;เป้าราคาเฉลี่ยนักวิเคราะห์ (ถ้ามี): {plan[&#39;analyst&#39;]:.2f}&#34;)
+
+    risk_baht = capital * risk_pct / 100
+    per_share = plan[&#34;entry&#34;] - plan[&#34;stop&#34;]
+    shares = int(risk_baht / per_share // 100 * 100) if per_share &gt; 0 else 0
+    max_shares = int(capital / plan[&#34;entry&#34;] // 100 * 100)
+    shares = min(shares, max_shares)
+    st.info(f&#34;ขนาดไม้ที่แนะนำ ≈ **{shares:,} หุ้น** (มูลค่า {shares * plan[&#39;entry&#39;]:,.0f} บาท, &#34;
+            f&#34;เสี่ยงสูงสุด ≈ {shares * per_share:,.0f} บาท)&#34;)
+
+    pos_f = [f&#34;**{r[0]}** ({r[1]}): {r[3]}&#34; for r in res[&#34;rows&#34;] if r[2] == 2]
+    neg_f = [f&#34;**{r[0]}** ({r[1]}): {r[3]}&#34; for r in res[&#34;rows&#34;] if r[2] == 0]
+
+    cl, cr = st.columns(2)
+    with cl:
+        st.markdown(&#34;#### ✅ เหตุผลสนับสนุนการซื้อ&#34;)
+        for t in pos_f + tech[&#34;pos&#34;]:
+            st.markdown(f&#34;- {t}&#34;)
+    with cr:
+        st.markdown(&#34;#### ⚠️ ความเสี่ยง / เหตุผลที่ควรขายหรือรอ&#34;)
+        for t in neg_f + tech[&#34;neg&#34;]:
+            st.markdown(f&#34;- {t}&#34;)
+
+    st.markdown(&#34;#### 🚪 เงื่อนไขออก&#34;)
+    st.markdown(
+        f&#34;- **ตัดขาดทุน:** ปิดต่ำกว่า {plan[&#39;stop&#39;]:.2f} (≈ 2×ATR ใต้จุดเข้า)\n&#34;
+        f&#34;- **ขายทำกำไรบางส่วน:** ถึง {plan[&#39;t1&#39;]:.2f} แล้วเลื่อน Stop ขึ้นมาที่จุดเข้า\n&#34;
+        f&#34;- **ขายที่เหลือ:** ถึง {plan[&#39;t2&#39;]:.2f}, RSI &gt; 75, หรือปิดต่ำกว่า SMA50 ({tech[&#39;sma50&#39;]:.2f})\n&#34;
+        &#34;- **ขายเพราะปัจจัยพื้นฐาน:** กำไร/รายได้ติดลบต่อเนื่อง หรือหนี้เพิ่มผิดปกติ&#34;
+    )
+
+    with st.expander(&#34;ตารางตัวชี้วัดพื้นฐานทั้งหมด&#34;):
+        st.dataframe(
+            pd.DataFrame(res[&#34;rows&#34;], columns=[&#34;ตัวชี้วัด&#34;, &#34;ค่า&#34;, &#34;คะแนน (0-2)&#34;, &#34;ความหมาย&#34;]),
+            hide_index=True, use_container_width=True,
+        )
+    st.caption(&#34;วิธีคิด: คะแนนรวม = 50% พื้นฐาน + 50% เทคนิค | ≥60 น่าสนใจ, 45–59 รอ, &lt;45 หลีกเลี่ยง &#34;
+               &#34;| กลุ่มการเงินไม่นำ D/E มาคิด | โมเดลเป็นกฎง่าย ๆ ควรตรวจสอบงบจริงก่อนตัดสินใจ&#34;)
+
+with tab2:
+    picks = st.multiselect(&#34;เลือกหุ้นที่ต้องการสแกน&#34;, WATCHLIST, default=WATCHLIST[:8])
+    if st.button(&#34;สแกน&#34;, type=&#34;primary&#34;) and picks:
+        out = []
+        bar = st.progress(0.0)
+        for i, t in enumerate(picks):
+            r = analyze(to_symbol(t))
+            if r:
+                out.append({
+                    &#34;หุ้น&#34;: t, &#34;ราคา&#34;: round(r[&#34;price&#34;], 2),
+                    &#34;พื้นฐาน&#34;: round(r[&#34;fpct&#34;]), &#34;เทคนิค&#34;: round(r[&#34;tech&#34;][&#34;score&#34;]),
+                    &#34;รวม&#34;: round(r[&#34;plan&#34;][&#34;combined&#34;]), &#34;สัญญาณ&#34;: r[&#34;plan&#34;][&#34;signal&#34;],
+                    &#34;โซนซื้อ&#34;: f&#34;{r[&#39;plan&#39;][&#39;zone&#39;][0]:.2f}-{r[&#39;plan&#39;][&#39;zone&#39;][1]:.2f}&#34;,
+                    &#34;Stop&#34;: round(r[&#34;plan&#34;][&#34;stop&#34;], 2), &#34;เป้า 1&#34;: round(r[&#34;plan&#34;][&#34;t1&#34;], 2),
+                })
+            bar.progress((i + 1) / len(picks))
+        if out:
+            st.dataframe(pd.DataFrame(out).sort_values(&#34;รวม&#34;, ascending=False),
+                         hide_index=True, use_container_width=True)
+        else:
+            st.warning(&#34;ไม่มีข้อมูลที่วิเคราะห์ได้&#34;)
+
+</code></pre>
+
+</body></html>
